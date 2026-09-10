@@ -1,0 +1,55 @@
+{
+  "name": "cursor-space-manager",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Move Cursor data off a full system drive without breaking the install.",
+  "keywords": [
+    "cursor",
+    "tauri",
+    "disk-space",
+    "migration",
+    "windows"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JackXhl/cursor-space-manager.git"
+  },
+  "bugs": {
+    "url": "https://github.com/JackXhl/cursor-space-manager/issues"
+  },
+  "homepage": "https://github.com/JackXhl/cursor-space-manager#readme",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "vue-tsc --noEmit",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build",
+    "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml",
+    "test": "npm run typecheck && npm run test:rust"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.9.0",
+    "@tauri-apps/plugin-clipboard-manager": "^2.3.3",
+    "@tauri-apps/plugin-dialog": "^2.4.0",
+    "@tauri-apps/plugin-opener": "^2.5.0",
+    "pinia": "^3.0.3",
+    "vue": "^3.5.22",
+    "vue-i18n": "^11.4.10",
+    "vue-router": "^4.5.1"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.9.0",
+    "@types/node": "^26.5.0",
+    "@vitejs/plugin-vue": "^6.0.1",
+    "typescript": "~5.9.2",
+    "vite": "^7.1.7",
+    "vue-tsc": "^3.1.1"
+  }
+}

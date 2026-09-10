@@ -1,0 +1,64 @@
+[package]
+name = "cursor-space-manager"
+version = "0.1.0"
+description = "Move Cursor data off a full system drive without breaking the install."
+authors = ["Cursor Space Manager contributors"]
+license = "MIT"
+repository = "https://github.com/JackXhl/cursor-space-manager"
+edition = "2021"
+rust-version = "1.77"
+
+[lib]
+name = "cursor_space_manager_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-clipboard-manager = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-opener = "2"
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+rusqlite = { version = "0.32", features = ["bundled"] }
+sha2 = "0.10"
+walkdir = "2"
+thiserror = "1"
+uuid = { version = "1", features = ["v4", "serde"] }
+sysinfo = "0.32"
+parking_lot = "0.12"
+log = "0.4"
+tauri-plugin-updater = "2.0.0-rc.4"
+url = "2.5.8"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Storage_FileSystem",
+    "Win32_System_IO",
+    "Win32_System_Ioctl",
+    "Win32_System_RestartManager",
+    "Win32_System_SystemServices",
+    "Win32_System_Threading",
+] }
+
+[dev-dependencies]
+tempfile = "3"
+uuid = { version = "1", features = ["v4"] }
+walkdir = "2"
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true

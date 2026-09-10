@@ -1,0 +1,69 @@
+name: Bug report / 缺陷
+description: Something went wrong while scanning, moving, or restoring Cursor data.
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. If Cursor will not start after a move, read the Recovery section in the README first.
+
+        搬家中断或 Cursor 打不开时，请先看 README 里的「故障恢复」。**不要**在 Issue 里粘贴真实用户名、家目录或未脱敏的日志。
+  - type: checkboxes
+    id: search
+    attributes:
+      label: Checks / 确认
+      options:
+        - label: I searched existing issues
+          required: true
+        - label: This is not a security vulnerability (those go to GitHub Security Advisories)
+          required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system / 操作系统
+      options:
+        - Windows 10
+        - Windows 11
+        - macOS
+        - Linux
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: App version / 版本
+      description: Settings → About, or the Git tag (for example 0.1.0).
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: textarea
+    id: happened
+    attributes:
+      label: What happened / 实际结果
+      description: What you saw. Redact user names and home directories.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected / 期望结果
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce / 复现步骤
+      placeholder: |
+        1. …
+        2. …
+        3. …
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Problem notes / 问题说明
+      description: Optional. Use Copy problem notes in the app so usernames are stripped.
+      render: text

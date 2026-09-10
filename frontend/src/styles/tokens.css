@@ -1,0 +1,182 @@
+/*
+ * Design tokens for a system utility.
+ *
+ * The visual language is deliberately restrained: this tool renames and deletes
+ * directories, and it should read like something that can be trusted with that,
+ * not like a marketing page. One accent hue, flat surfaces, and colour reserved
+ * for status meaning.
+ */
+
+:root {
+  --font-sans: 'Inter', 'Segoe UI Variable Text', 'Segoe UI', -apple-system,
+    BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif;
+  --font-mono: 'Cascadia Mono', 'SF Mono', 'JetBrains Mono', Consolas, monospace;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.8125rem;
+  --text-base: 0.875rem;
+  --text-md: 1rem;
+  --text-lg: 1.25rem;
+  --text-xl: 1.625rem;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-full: 999px;
+
+  --duration-fast: 120ms;
+  --duration-base: 200ms;
+  --ease: cubic-bezier(0.2, 0, 0.13, 1);
+
+  --sidebar-width: 232px;
+  --header-height: 56px;
+}
+
+/* Light theme. Contrast ratios on --surface are >= 4.5:1 for all text tokens. */
+:root,
+[data-theme='light'] {
+  --bg: #f4f5f7;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --surface-sunken: #eceef1;
+  --surface-hover: #f0f2f5;
+
+  --border: #dcdfe4;
+  --border-strong: #c2c7cf;
+
+  --text: #1a1d21;
+  --text-secondary: #5b6470;
+  --text-tertiary: #7b848f;
+  --text-inverse: #ffffff;
+
+  --accent: #2563c9;
+  --accent-hover: #1e56b0;
+  --accent-active: #17458f;
+  --accent-soft: #e8f0fd;
+  --accent-border: #b9d0f5;
+
+  --success: #1a7f4b;
+  --success-soft: #e4f4ec;
+  --success-border: #a9dcc2;
+
+  --warning: #96590a;
+  --warning-soft: #fdf1dd;
+  --warning-border: #ecc98a;
+
+  --danger: #bf2c34;
+  --danger-soft: #fdeaeb;
+  --danger-border: #f0b4b7;
+
+  --neutral-soft: #eef0f3;
+
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
+  --shadow-md: 0 4px 12px rgba(16, 24, 40, 0.08);
+  --shadow-lg: 0 12px 32px rgba(16, 24, 40, 0.12);
+
+  --skeleton-base: #e6e8ec;
+  --skeleton-shine: #f2f3f5;
+
+  color-scheme: light;
+}
+
+[data-theme='dark'] {
+  --bg: #17191d;
+  --surface: #1e2126;
+  --surface-raised: #262a30;
+  --surface-sunken: #141619;
+  --surface-hover: #2a2f36;
+
+  --border: #32373f;
+  --border-strong: #454b55;
+
+  --text: #e8eaed;
+  --text-secondary: #a4acb8;
+  --text-tertiary: #7f8794;
+  --text-inverse: #10131a;
+
+  --accent: #6ba3f5;
+  --accent-hover: #83b3f8;
+  --accent-active: #9cc3fa;
+  --accent-soft: #1c2b42;
+  --accent-border: #2f4straight;
+  --accent-border: #34517d;
+
+  --success: #5fce97;
+  --success-soft: #16301f;
+  --success-border: #2c5a3f;
+
+  --warning: #e2ae5e;
+  --warning-soft: #33260f;
+  --warning-border: #5f4820;
+
+  --danger: #f0868c;
+  --danger-soft: #3a1c1f;
+  --danger-border: #6b3236;
+
+  --neutral-soft: #262a30;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.36);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.44);
+
+  --skeleton-base: #262a30;
+  --skeleton-shine: #303640;
+
+  color-scheme: dark;
+}
+
+/* Honour the OS setting, and the in-app override when the user sets one. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg: #17191d;
+    --surface: #1e2126;
+    --surface-raised: #262a30;
+    --surface-sunken: #141619;
+    --surface-hover: #2a2f36;
+
+    --border: #32373f;
+    --border-strong: #454b55;
+
+    --text: #e8eaed;
+    --text-secondary: #a4acb8;
+    --text-tertiary: #7f8794;
+    --text-inverse: #10131a;
+
+    --accent: #6ba3f5;
+    --accent-hover: #83b3f8;
+    --accent-active: #9cc3fa;
+    --accent-soft: #1c2b42;
+    --accent-border: #34517d;
+
+    --success: #5fce97;
+    --success-soft: #16301f;
+    --success-border: #2c5a3f;
+
+    --warning: #e2ae5e;
+    --warning-soft: #33260f;
+    --warning-border: #5f4820;
+
+    --danger: #f0868c;
+    --danger-soft: #3a1c1f;
+    --danger-border: #6b3236;
+
+    --neutral-soft: #262a30;
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.36);
+    --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.44);
+
+    --skeleton-base: #262a30;
+    --skeleton-shine: #303640;
+
+    color-scheme: dark;
+  }
+}

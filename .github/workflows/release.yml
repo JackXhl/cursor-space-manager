@@ -1,0 +1,230 @@
+name: Release
+
+# Publishing is driven by a version tag so the artifacts, the updater manifest
+# and the Git history always describe the same build.
+#
+# Same sequence as skills-manager: every platform writes into a *draft* Release
+# first. latest.json is only reachable after the draft is published, so the
+# in-app updater cannot pick up a half-built payload while another OS is still
+# packing. After all jobs succeed, verify-updater-assets checks the draft, then
+# publish-release flips draft=false.
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      # Let every OS finish so one failure does not hide the others. The later
+      # jobs still require the whole matrix to succeed before publishing.
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-latest
+            args: ''
+          - platform: macos-latest
+            # A universal binary so one download covers Intel and Apple silicon.
+            args: '--target universal-apple-darwin'
+          - platform: ubuntu-22.04
+            args: ''
+
+    runs-on: ${{ matrix.platform }}
+    timeout-minutes: 90
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+          # Windows cache uploads are flaky and not worth failing a release over.
+          save-if: ${{ matrix.platform != 'windows-latest' }}
+
+      - name: Install Linux dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - run: npm ci
+
+      - name: Test
+        run: |
+          npm run typecheck
+          cargo test --manifest-path src-tauri/Cargo.toml
+
+      - name: Extract changelog
+        id: changelog
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          {
+            echo "body<<CHANGELOG_EOF"
+            if [[ "${GITHUB_REF}" != refs/tags/* ]]; then
+              echo "Manual workflow run. See CHANGELOG.md."
+            else
+              awk -v ver="$VERSION" '
+                $0 ~ "^## \\[" ver "\\]" {p=1; next}
+                p && $0 ~ /^## \[/ {exit}
+                p {print}
+              ' CHANGELOG.md | sed 's/[[:space:]]*$//' | awk 'NF{n=NR} {a[NR]=$0} END{for(i=1;i<=n;i++) print a[i]}'
+            fi
+            echo "CHANGELOG_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: tauri-apps/tauri-action@v0
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Signs the update payload. Without these the updater refuses the
+          # artifact, which is the intended failure mode.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # Authenticode. Absent on forks, where the build stays unsigned.
+          TAURI_WINDOWS_SIGN_COMMAND: ${{ secrets.TAURI_WINDOWS_SIGN_COMMAND }}
+          # Apple notarisation.
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: 'Cursor 空间迁移工具 ${{ github.ref_name }}'
+          releaseBody: ${{ steps.changelog.outputs.body }}
+          releaseDraft: true
+          prerelease: false
+          includeUpdaterJson: true
+          updaterJsonKeepUniversal: true
+          args: ${{ matrix.args }}
+
+  verify-updater-assets:
+    name: Verify updater assets
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Confirm latest.json, signatures, and platform entries
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          # Drafts 404 on /releases/tags/{tag}. List and match the tag instead.
+          release_json="$(gh api --paginate "/repos/${REPO}/releases" \
+            | jq -c --arg tag "$TAG" '[.[] | select(.tag_name == $tag)] | .[0]')"
+
+          if [[ "$release_json" == "null" || -z "$release_json" ]]; then
+            echo "No GitHub Release found for tag ${TAG}"
+            exit 1
+          fi
+
+          echo "Found release id=$(echo "$release_json" | jq -r '.id') draft=$(echo "$release_json" | jq -r '.draft')"
+
+          mapfile -t assets < <(echo "$release_json" | jq -r '.assets[].name')
+          printf 'Assets:\n'
+          printf '  %s\n' "${assets[@]}"
+
+          has() {
+            local needle="$1"
+            local name
+            for name in "${assets[@]}"; do
+              [[ "$name" == "$needle" ]] && return 0
+            done
+            return 1
+          }
+
+          has_match() {
+            local regex="$1"
+            local name
+            for name in "${assets[@]}"; do
+              [[ "$name" =~ $regex ]] && return 0
+            done
+            return 1
+          }
+
+          has 'latest.json' || { echo "missing latest.json"; exit 1; }
+          has_match '\.sig$' || { echo "missing updater .sig files"; exit 1; }
+          has_match '\.(exe|msi)$' || { echo "missing Windows installer (.exe or .msi)"; exit 1; }
+          has_match '\.(dmg|app\.tar\.gz)$' || { echo "missing macOS bundle (.dmg or .app.tar.gz)"; exit 1; }
+          has_match '\.(AppImage|deb)$' || { echo "missing Linux package (.AppImage or .deb)"; exit 1; }
+
+          asset_id="$(echo "$release_json" | jq -r '.assets[] | select(.name=="latest.json") | .id')"
+          gh api -H "Accept: application/octet-stream" \
+            "/repos/${REPO}/releases/assets/${asset_id}" > latest.json
+
+          jq empty latest.json
+          echo "latest.json keys: $(jq -r '.platforms | keys | join(", ")' latest.json)"
+
+          expected_version="${TAG#v}"
+          manifest_version="$(jq -r '.version' latest.json)"
+          if [[ "$manifest_version" != "$expected_version" ]]; then
+            echo "latest.json version ${manifest_version} does not match tag ${TAG}"
+            exit 1
+          fi
+
+          need_platform() {
+            local platform="$1"
+            if ! jq -e --arg p "$platform" '
+              .platforms[$p].url != null and .platforms[$p].url != ""
+              and .platforms[$p].signature != null and .platforms[$p].signature != ""
+            ' latest.json >/dev/null; then
+              echo "latest.json is missing a signed updater entry for ${platform}"
+              jq '.platforms' latest.json
+              exit 1
+            fi
+          }
+
+          need_platform windows-x86_64
+          need_platform linux-x86_64
+
+          darwin_keys="$(jq -r '.platforms | keys[]' latest.json | grep -E '^(darwin-aarch64|darwin-x86_64|darwin-universal)$' || true)"
+          if [[ -z "$darwin_keys" ]]; then
+            echo "latest.json is missing a darwin updater entry"
+            jq '.platforms | keys' latest.json
+            exit 1
+          fi
+          while IFS= read -r key; do
+            need_platform "$key"
+          done <<< "$darwin_keys"
+
+          echo "Updater assets look complete."
+
+  publish-release:
+    name: Publish GitHub Release
+    needs: [build, verify-updater-assets]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Publish draft
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # Makes /releases/latest and latest.json public so the in-app updater
+          # can download them. Do this only after every platform and the
+          # manifest have been checked.
+          gh release edit "${{ github.ref_name }}" \
+            --repo "${{ github.repository }}" \
+            --draft=false
+          echo "Published ${{ github.ref_name }}"

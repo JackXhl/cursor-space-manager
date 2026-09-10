@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Recovery / 故障恢复
+    url: https://github.com/JackXhl/cursor-space-manager/blob/main/README.zh-CN.md#故障恢复
+    about: Interrupted move, Cursor will not start, or a path looks duplicated — read this first.
+  - name: Security vulnerability / 安全漏洞
+    url: https://github.com/JackXhl/cursor-space-manager/security/advisories/new
+    about: Private report only. Do not file a public issue.
