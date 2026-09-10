@@ -62,9 +62,13 @@ jobs:
 
       - run: npm ci
 
+      # cargo test compiles lib.rs, which runs generate_context!() and requires
+      # frontendDist (../dist) to already exist. CI runs `npm run build` first
+      # for the same reason.
       - name: Test
         run: |
           npm run typecheck
+          npm run build
           cargo test --manifest-path src-tauri/Cargo.toml
 
       - name: Extract changelog
