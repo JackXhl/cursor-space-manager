@@ -573,7 +573,7 @@ pub fn discover_installation() -> AppInstallation {
 }
 
 fn paths_equal(a: &Path, b: &Path) -> bool {
-    a.to_string_lossy().to_lowercase() == b.to_string_lossy().to_lowercase()
+    crate::util::paths_equal(a, b)
 }
 
 pub fn running_processes() -> Vec<RunningProcess> {

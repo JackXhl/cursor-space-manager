@@ -38,30 +38,37 @@ pub fn timestamp_slug() -> String {
     )
 }
 
-/// Case-insensitive on Windows, case-sensitive elsewhere, matching how the
-/// respective filesystems actually behave.
+/// Same filesystem location, not just the same string.
+///
+/// Windows runners (and some TEMP values) mix 8.3 names (`RUNNER~1`) with the
+/// long form (`runneradmin`). Junctions are written via `canonicalize`, so a
+/// string compare would treat a finished move as an unexpected link.
 pub fn paths_equal(a: &Path, b: &Path) -> bool {
-    if cfg!(windows) {
-        a.to_string_lossy().to_lowercase() == b.to_string_lossy().to_lowercase()
-    } else {
-        a == b
-    }
+    a == b || comparable_path(a) == comparable_path(b)
 }
 
 pub fn is_inside(child: &Path, parent: &Path) -> bool {
-    let (child, parent) = if cfg!(windows) {
-        (
-            child.to_string_lossy().to_lowercase(),
-            parent.to_string_lossy().to_lowercase(),
-        )
+    let child = comparable_path(child);
+    let parent = comparable_path(parent);
+    let sep = std::path::MAIN_SEPARATOR;
+    child == parent || child.starts_with(&format!("{parent}{sep}"))
+}
+
+fn comparable_path(path: &Path) -> String {
+    let resolved = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    let mut text = resolved.to_string_lossy().replace('/', "\\");
+    if cfg!(windows) {
+        const UNC: &str = r"\\?\UNC\";
+        const VERBATIM: &str = r"\\?\";
+        if let Some(rest) = text.strip_prefix(UNC) {
+            text = format!(r"\\{rest}");
+        } else if let Some(rest) = text.strip_prefix(VERBATIM) {
+            text = rest.to_string();
+        }
+        text.trim_end_matches('\\').to_lowercase()
     } else {
-        (
-            child.to_string_lossy().to_string(),
-            parent.to_string_lossy().to_string(),
-        )
-    };
-    let parent = parent.trim_end_matches(['/', '\\']).to_string();
-    child == parent || child.starts_with(&format!("{parent}{}", std::path::MAIN_SEPARATOR))
+        resolved.to_string_lossy().trim_end_matches('/').to_string()
+    }
 }
 
 /// Strips user names and other identifying path segments before anything is
@@ -132,6 +139,22 @@ mod tests {
         assert!(is_inside(&inside, &parent));
         assert!(is_inside(&parent, &parent));
         assert!(!is_inside(&sibling, &parent));
+    }
+
+    #[test]
+    fn existing_directory_equals_its_canonical_path() {
+        let temp = tempfile::tempdir().unwrap();
+        let inner = temp.path().join("folder");
+        std::fs::create_dir_all(&inner).unwrap();
+        let canonical = std::fs::canonicalize(&inner).unwrap();
+        assert!(
+            paths_equal(&inner, &canonical),
+            "temp {:?}\ncanonical {:?}",
+            inner,
+            canonical
+        );
+        assert!(is_inside(&inner, temp.path()));
+        assert!(is_inside(&canonical, temp.path()));
     }
 
     #[test]
