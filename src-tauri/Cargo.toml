@@ -29,7 +29,7 @@ sha2 = "0.10"
 walkdir = "2"
 thiserror = "1"
 uuid = { version = "1", features = ["v4", "serde"] }
-sysinfo = "0.32"
+sysinfo = "0.39"
 parking_lot = "0.12"
 log = "0.4"
 tauri-plugin-updater = "2.0.0-rc.4"
