@@ -78,6 +78,27 @@ jobs:
             echo "CHANGELOG_EOF"
           } >> "$GITHUB_OUTPUT"
 
+      # Retagging v0.1.0 leaves a draft whose asset names collide. tauri-action
+      # cannot overwrite, so drop the leftover draft before uploading again.
+      - name: Drop leftover draft for this tag
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          release_json="$(gh api --paginate "/repos/${REPO}/releases" \
+            | jq -c --arg tag "$TAG" '[.[] | select(.tag_name == $tag and .draft == true)] | .[0]')"
+          if [[ "$release_json" == "null" || -z "$release_json" ]]; then
+            echo "No leftover draft for ${TAG}"
+            exit 0
+          fi
+          id="$(echo "$release_json" | jq -r '.id')"
+          echo "Deleting leftover draft release id=${id}"
+          gh api -X DELETE "/repos/${REPO}/releases/${id}"
+
       - uses: tauri-apps/tauri-action@v0
         if: startsWith(github.ref, 'refs/tags/')
         env:
