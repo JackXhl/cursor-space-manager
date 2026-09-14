@@ -7,11 +7,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
-### Changed
-
-- Release workflow publishes Windows only; macOS and Linux are deferred.
-
-## [0.1.0] - 2026-09-10
+## [0.1.0] - 2026-09-14
 
 ### Added
 
@@ -22,7 +18,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - English UI via `vue-i18n`, with language selection in Settings.
 - In-app download and install for signed GitHub Releases.
 - Release workflow verifies updater assets and publishes the GitHub draft
-  automatically after the Windows build succeeds.
+  automatically after the Windows build succeeds. macOS and Linux are not
+  in this release matrix.
 
 [Unreleased]: https://github.com/JackXhl/cursor-space-manager/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/JackXhl/cursor-space-manager/releases/tag/v0.1.0
