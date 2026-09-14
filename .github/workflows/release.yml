@@ -99,7 +99,7 @@ jobs:
           echo "Deleting leftover draft release id=${id}"
           gh api -X DELETE "/repos/${REPO}/releases/${id}"
 
-      - uses: tauri-apps/tauri-action@v0
+      - uses: tauri-apps/tauri-action@v1
         if: startsWith(github.ref, 'refs/tags/')
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
