@@ -89,13 +89,15 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          release_json="$(gh api --paginate "/repos/${REPO}/releases" \
-            | jq -c --arg tag "$TAG" '[.[] | select(.tag_name == $tag and .draft == true)] | .[0]')"
-          if [[ "$release_json" == "null" || -z "$release_json" ]]; then
+          # Windows runners do not ship jq. Use gh's built-in --jq instead.
+          # Drafts 404 on /releases/tags/{tag}, so list and filter.
+          id="$(gh api --paginate "/repos/${REPO}/releases" \
+            --jq ".[] | select(.tag_name==\"${TAG}\" and .draft==true) | .id" \
+            | head -n 1 || true)"
+          if [[ -z "${id}" || "${id}" == "null" ]]; then
             echo "No leftover draft for ${TAG}"
             exit 0
           fi
-          id="$(echo "$release_json" | jq -r '.id')"
           echo "Deleting leftover draft release id=${id}"
           gh api -X DELETE "/repos/${REPO}/releases/${id}"
 
