@@ -247,7 +247,12 @@ pub fn list_volumes() -> Vec<VolumeInfo> {
 /// [`list_volumes`]: the callers ask for a path's volume constantly, and
 /// measuring free space for every mount each time would spawn a `df` per mount.
 pub fn volume_root_for(path: &Path) -> Option<String> {
-    let text = path.to_string_lossy().to_string();
+    // macOS `/tmp` is a symlink to `/private/tmp` on the Data volume. Match
+    // mounts against the real path or we report the sealed system root.
+    let text = std::fs::canonicalize(path)
+        .unwrap_or_else(|_| path.to_path_buf())
+        .to_string_lossy()
+        .to_string();
     let mut best: Option<String> = None;
     for entry in read_mounts() {
         // Everything is under the root mount; anything else has to be a real
@@ -316,7 +321,8 @@ pub fn create_directory_link(link: &Path, target: &Path) -> AppResult<()> {
             link.display()
         )));
     }
-    std::os::unix::fs::symlink(target, link)?;
+    let absolute = std::fs::canonicalize(target)?;
+    std::os::unix::fs::symlink(absolute, link)?;
     Ok(())
 }
 
@@ -665,12 +671,15 @@ mod tests {
 
     #[test]
     fn a_path_resolves_to_the_deepest_containing_mount() {
-        // Whatever the machine looks like, the root always contains everything
-        // and the answer must be a prefix of the path we asked about.
-        let resolved = volume_root_for(Path::new("/tmp")).expect("root always matches");
+        // Use a real temp dir so macOS `/tmp` → `/private/tmp` and Linux tmpfs
+        // `/tmp` do not make the assertion depend on a synthetic path.
+        let temp = tempfile::tempdir().unwrap();
+        let probe = std::fs::canonicalize(temp.path()).unwrap();
+        let resolved = volume_root_for(&probe).expect("root always matches");
+        let text = probe.to_string_lossy();
         assert!(
-            resolved == "/" || under_prefix("/tmp", &resolved),
-            "unexpected mount {resolved} for /tmp"
+            resolved == "/" || under_prefix(&text, &resolved) || text.as_ref() == resolved,
+            "unexpected mount {resolved} for {text}"
         );
     }
 

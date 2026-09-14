@@ -3,11 +3,13 @@ name: Release
 # Publishing is driven by a version tag so the artifacts, the updater manifest
 # and the Git history always describe the same build.
 #
-# Same sequence as skills-manager: every platform writes into a *draft* Release
-# first. latest.json is only reachable after the draft is published, so the
-# in-app updater cannot pick up a half-built payload while another OS is still
-# packing. After all jobs succeed, verify-updater-assets checks the draft, then
-# publish-release flips draft=false.
+# Same sequence as skills-manager: the Windows job writes into a *draft*
+# Release first. latest.json is only reachable after the draft is published, so
+# the in-app updater cannot pick up a half-built payload. After the Windows
+# build succeeds, verify-updater-assets checks the draft, then publish-release
+# flips draft=false.
+#
+# macOS and Linux are not part of the published matrix yet (Windows first).
 on:
   push:
     tags:
@@ -20,17 +22,10 @@ permissions:
 jobs:
   build:
     strategy:
-      # Let every OS finish so one failure does not hide the others. The later
-      # jobs still require the whole matrix to succeed before publishing.
       fail-fast: false
       matrix:
         include:
           - platform: windows-latest
-            args: ''
-          - platform: macos-latest
-            # A universal binary so one download covers Intel and Apple silicon.
-            args: '--target universal-apple-darwin'
-          - platform: ubuntu-22.04
             args: ''
 
     runs-on: ${{ matrix.platform }}
@@ -45,20 +40,12 @@ jobs:
           cache: npm
 
       - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: './src-tauri -> target'
           # Windows cache uploads are flaky and not worth failing a release over.
           save-if: ${{ matrix.platform != 'windows-latest' }}
-
-      - name: Install Linux dependencies
-        if: matrix.platform == 'ubuntu-22.04'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
       - run: npm ci
 
@@ -169,8 +156,6 @@ jobs:
           has 'latest.json' || { echo "missing latest.json"; exit 1; }
           has_match '\.sig$' || { echo "missing updater .sig files"; exit 1; }
           has_match '\.(exe|msi)$' || { echo "missing Windows installer (.exe or .msi)"; exit 1; }
-          has_match '\.(dmg|app\.tar\.gz)$' || { echo "missing macOS bundle (.dmg or .app.tar.gz)"; exit 1; }
-          has_match '\.(AppImage|deb)$' || { echo "missing Linux package (.AppImage or .deb)"; exit 1; }
 
           asset_id="$(echo "$release_json" | jq -r '.assets[] | select(.name=="latest.json") | .id')"
           gh api -H "Accept: application/octet-stream" \
@@ -199,17 +184,6 @@ jobs:
           }
 
           need_platform windows-x86_64
-          need_platform linux-x86_64
-
-          darwin_keys="$(jq -r '.platforms | keys[]' latest.json | grep -E '^(darwin-aarch64|darwin-x86_64|darwin-universal)$' || true)"
-          if [[ -z "$darwin_keys" ]]; then
-            echo "latest.json is missing a darwin updater entry"
-            jq '.platforms | keys' latest.json
-            exit 1
-          fi
-          while IFS= read -r key; do
-            need_platform "$key"
-          done <<< "$darwin_keys"
 
           echo "Updater assets look complete."
 
@@ -226,7 +200,7 @@ jobs:
         run: |
           set -euo pipefail
           # Makes /releases/latest and latest.json public so the in-app updater
-          # can download them. Do this only after every platform and the
+          # can download them. Do this only after the Windows build and the
           # manifest have been checked.
           gh release edit "${{ github.ref_name }}" \
             --repo "${{ github.repository }}" \

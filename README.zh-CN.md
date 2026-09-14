@@ -10,7 +10,7 @@
 
 Cursor 的缓存、扩展和工作区状态会随使用不断变大，而这些目录都固定在系统盘。本工具扫描出它们的真实占用，把可以搬走的部分复制到目标盘，再用 NTFS Junction（macOS/Linux 上是符号链接）把原路径指过去，Cursor 无需任何配置改动即可继续使用。
 
-> 状态：v0.1.0，Windows 优先。macOS/Linux 的平台适配代码已就位，但尚未在这两个系统上完成验证。
+> 状态：v0.1.0，**Windows 优先**。macOS/Linux 适配代码已在仓库中，但尚未纳入公开发版矩阵。
 
 本项目为非官方工具，与 Anysphere 无关。Cursor 为其权利人的商标。
 
@@ -80,7 +80,7 @@ Rust 侧包含单元测试和一套故障注入集成测试（`src-tauri/tests/f
 
 ## 发布与签名
 
-版本号来自构建元数据，不能通过配置文件篡改。推送 `v*` tag 会跑 `.github/workflows/release.yml`：各平台先把安装包写进 **草稿** Release（避免更新器读到半成品 `latest.json`）。三端都成功后，工作流会校验 `latest.json`、`.sig` 以及 Windows / macOS / Linux 更新条目，再 **自动把草稿改成正式版**，不用再去 GitHub 点 Publish。
+版本号来自构建元数据，不能通过配置文件篡改。推送 `v*` tag 会跑 `.github/workflows/release.yml`：Windows 先把安装包写进 **草稿** Release（避免更新器读到半成品 `latest.json`）。成功后，工作流会校验 `latest.json`、`.sig` 以及 Windows 更新条目，再 **自动把草稿改成正式版**，不用再去 GitHub 点 Publish。
 
 需要配置以下 secrets：
 

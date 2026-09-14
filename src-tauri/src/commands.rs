@@ -335,7 +335,9 @@ pub fn start_migration(
         .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
         .is_err()
     {
-        return Err(AppErrorWire(AppError::invalid("正在搬家，请等当前这次完成")));
+        return Err(AppErrorWire(AppError::invalid(
+            "正在搬家，请等当前这次完成",
+        )));
     }
     state.migration_cancel.store(false, Ordering::SeqCst);
 

@@ -79,9 +79,7 @@ fn describe_link_state(state: &LinkState) -> Option<String> {
     match state {
         LinkState::Junction(target) => Some(format!("已经指向其他位置：{}", target.display())),
         LinkState::Symlink(target) => Some(format!("已经指向其他位置：{}", target.display())),
-        LinkState::UnknownReparse(_) => {
-            Some("这里有一个特殊链接，工具不会自动改动".into())
-        }
+        LinkState::UnknownReparse(_) => Some("这里有一个特殊链接，工具不会自动改动".into()),
         _ => None,
     }
 }

@@ -56,8 +56,8 @@ pub fn is_inside(child: &Path, parent: &Path) -> bool {
 
 fn comparable_path(path: &Path) -> String {
     let resolved = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
-    let mut text = resolved.to_string_lossy().replace('/', "\\");
     if cfg!(windows) {
+        let mut text = resolved.to_string_lossy().replace('/', "\\");
         const UNC: &str = r"\\?\UNC\";
         const VERBATIM: &str = r"\\?\";
         if let Some(rest) = text.strip_prefix(UNC) {

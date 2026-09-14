@@ -222,10 +222,7 @@ pub fn diagnose(journal: &Journal, operation_id: &str) -> AppResult<RecoveryRepo
         recorded_state,
         resolved_state,
         roots,
-        dangling_actions: dangling
-            .into_iter()
-            .map(|intent| intent.action)
-            .collect(),
+        dangling_actions: dangling.into_iter().map(|intent| intent.action).collect(),
         summary,
         requires_user_decision: any_needs_user,
     })

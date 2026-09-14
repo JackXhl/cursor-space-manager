@@ -15,7 +15,7 @@ an NTFS junction (a symlink on macOS/Linux). Cursor keeps working with no
 settings change.
 
 > Status: v0.1.0, **Windows first**. macOS/Linux platform code is in the tree
-> but has not been fully verified on those systems.
+> but is not part of the published release matrix yet.
 
 This project is unofficial and is **not** affiliated with Anysphere. Cursor is
 a trademark of its respective owner.
@@ -118,10 +118,10 @@ against the latest scan.
 ## Release and signing
 
 The version comes from build metadata; a settings file cannot change it.
-Pushing a `v*` tag runs `.github/workflows/release.yml`. Each platform uploads
-into a **draft** GitHub Release (so the updater cannot see a half-built
-`latest.json`). After every OS succeeds, the workflow checks that `latest.json`,
-`.sig` files, and Windows / macOS / Linux updater entries exist, then
+Pushing a `v*` tag runs `.github/workflows/release.yml`. The Windows job
+uploads into a **draft** GitHub Release (so the updater cannot see a half-built
+`latest.json`). After it succeeds, the workflow checks that `latest.json`,
+`.sig` files, and the Windows updater entry exist, then
 **publishes the draft automatically**. There is no extra click on GitHub.
 
 Configure these secrets:

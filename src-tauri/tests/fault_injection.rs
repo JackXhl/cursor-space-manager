@@ -143,19 +143,27 @@ impl Fixture {
 /// Content of a tree as (relative path, bytes), so two locations can be
 /// compared regardless of where they live.
 fn snapshot(root: &Path) -> Vec<(String, Vec<u8>)> {
+    // After cutover the source path is a symlink. WalkDir follows that root
+    // and emits the *target* paths, which do not share the source prefix, so
+    // strip_prefix panics on macOS/Linux. Canonicalize first so we walk the
+    // real directory and the prefix matches.
+    let root = std::fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
     let mut entries = Vec::new();
-    for entry in walkdir::WalkDir::new(root).follow_links(false).min_depth(1) {
+    for entry in walkdir::WalkDir::new(&root)
+        .follow_links(false)
+        .min_depth(1)
+    {
         let entry = entry.unwrap();
         if !entry.file_type().is_file() {
             continue;
         }
-        let relative = entry
-            .path()
-            .strip_prefix(root)
-            .unwrap()
-            .to_string_lossy()
-            .replace('\\', "/");
-        entries.push((relative, std::fs::read(entry.path()).unwrap()));
+        let Ok(relative) = entry.path().strip_prefix(&root) else {
+            continue;
+        };
+        entries.push((
+            relative.to_string_lossy().replace('\\', "/"),
+            std::fs::read(entry.path()).unwrap(),
+        ));
     }
     entries.sort();
     entries
