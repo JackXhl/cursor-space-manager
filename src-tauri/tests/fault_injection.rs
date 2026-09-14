@@ -15,6 +15,7 @@ use cursor_space_manager_lib::core::model::*;
 use cursor_space_manager_lib::core::planner::{BACKUP_SUFFIX, STAGING_DIR};
 use cursor_space_manager_lib::core::{recovery, verifier};
 use cursor_space_manager_lib::platforms;
+use cursor_space_manager_lib::util::paths_equal;
 
 // ---------------------------------------------------------------------------
 // Harness
@@ -195,9 +196,12 @@ fn successful_migration_links_source_and_retains_backup() {
     // The original path now resolves to the target.
     let state = platforms::link_state(&root.source_path);
     assert!(state.is_link(), "source should be a link, got {state:?}");
-    assert_eq!(
-        state.target().map(|t| t.to_path_buf()),
-        Some(root.target_path.clone())
+    let linked = state.target().expect("link must name a target");
+    assert!(
+        paths_equal(linked, &root.target_path),
+        "link target should be the migrated folder\n  linked: {}\n  planned: {}",
+        linked.display(),
+        root.target_path.display()
     );
 
     // Data is readable through the link, present at the target, and still in
