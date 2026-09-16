@@ -1,0 +1,7 @@
+# gitignore hides local agent notes from GitHub. Keep them readable here.
+!AGENTS.md
+!CLAUDE.md
+!.cursor/rules/
+!.cursor/rules/**
+!reference/
+!reference/**
