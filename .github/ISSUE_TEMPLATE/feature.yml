@@ -1,0 +1,40 @@
+name: Feature request / 功能建议
+description: Suggest an improvement that does not change the safety invariants.
+title: "[Feature]: "
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This tool’s invariant is that **a complete copy of the data exists on disk at every moment**. Proposals that weaken that (force-killing Cursor, `robocopy /MIR`, deleting backups automatically) will be declined.
+  - type: checkboxes
+    id: search
+    attributes:
+      label: Checks / 确认
+      options:
+        - label: I searched existing issues
+          required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / 要解决的问题
+      description: What is painful or missing today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal / 建议做法
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform / 平台
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - All
+    validations:
+      required: true

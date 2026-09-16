@@ -1,0 +1,15 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Frontend may only call this app's own allowlisted commands. No blanket filesystem or shell access is granted, so a compromised webview cannot reach arbitrary paths.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-start-dragging",
+    "dialog:allow-open",
+    "opener:allow-open-path",
+    "opener:allow-open-url",
+    "opener:allow-reveal-item-in-dir",
+    "clipboard-manager:allow-write-text"
+  ]
+}

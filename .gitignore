@@ -1,0 +1,40 @@
+node_modules/
+dist/
+.DS_Store
+*.local
+*.log
+
+# Rust / Cargo
+debug/
+target/
+src-tauri/target/
+src-tauri/gen/
+**/*.rs.bk
+*.pdb
+**/mutants.out*/
+
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+desktop.ini
+
+# Screenshots and scratch output from local verification runs.
+.artifacts/
+
+# Signing material and release secrets must never be committed.
+*.pfx
+*.p12
+*.key
+.env
+.env.*
+!.env.example
+
+# Local working notes for the maintainer and AI agents. Not published.
+.claude
+.loop-log
+docs
+reference
+CLAUDE.md
+AGENTS.md
+.cursor/rules/
