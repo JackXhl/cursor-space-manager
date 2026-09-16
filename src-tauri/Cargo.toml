@@ -1,6 +1,6 @@
 [package]
 name = "cursor-space-manager"
-version = "0.1.1"
+version = "0.1.2"
 description = "Move Cursor data off a full system drive without breaking the install."
 authors = ["Cursor Space Manager contributors"]
 license = "MIT"
@@ -40,8 +40,10 @@ windows-sys = { version = "0.59", features = [
     "Win32_Foundation",
     "Win32_Security",
     "Win32_Storage_FileSystem",
+    "Win32_System_Environment",
     "Win32_System_IO",
     "Win32_System_Ioctl",
+    "Win32_System_Registry",
     "Win32_System_RestartManager",
     "Win32_System_SystemServices",
     "Win32_System_Threading",

@@ -58,7 +58,9 @@ mod process_tests {
         assert!(is_cursor_process("Cursor Helper (GPU).exe", None));
         assert!(is_cursor_process(
             "ignored",
-            Some(Path::new(r"C:\Users\me\AppData\Local\Programs\cursor\Cursor.exe")),
+            Some(Path::new(
+                r"C:\Users\me\AppData\Local\Programs\cursor\Cursor.exe"
+            )),
         ));
     }
 

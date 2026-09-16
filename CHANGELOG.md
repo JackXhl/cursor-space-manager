@@ -7,6 +7,14 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-09-16
+
+### Fixed
+
+- Windows scan finds a custom Cursor install (for example `D:\tools\cursor`)
+  from Uninstall / App Paths / protocol registry entries and `PATH`, not only
+  Program Files and a process that happens to be running.
+
 ## [0.1.1] - 2026-09-16
 
 ### Added
@@ -30,5 +38,6 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 - Execute re-checks the latest scan, source paths, and that the target is still
   writable. An unexpected link is never undone automatically.
 
-[Unreleased]: https://github.com/JackXhl/cursor-space-manager/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/JackXhl/cursor-space-manager/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/JackXhl/cursor-space-manager/releases/tag/v0.1.2
 [0.1.1]: https://github.com/JackXhl/cursor-space-manager/releases/tag/v0.1.1

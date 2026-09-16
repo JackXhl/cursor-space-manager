@@ -579,10 +579,7 @@ mod tests {
         let moved = temp.path().join("moved");
         std::fs::create_dir_all(&moved).unwrap();
 
-        let mut report = sample_report(
-            vec![sample_root("a", source.clone(), 10)],
-            Vec::new(),
-        );
+        let mut report = sample_report(vec![sample_root("a", source.clone(), 10)], Vec::new());
         let request = MigrationRequest {
             root_ids: vec!["a".into()],
             target_root: temp.path().join("target"),

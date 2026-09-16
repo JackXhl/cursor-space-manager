@@ -10,6 +10,7 @@ use crate::platforms::{CandidateRoot, CopyOutcome};
 use std::ffi::{c_void, OsStr, OsString};
 use std::os::windows::ffi::{OsStrExt, OsStringExt};
 use std::path::{Path, PathBuf};
+use std::ptr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
@@ -18,6 +19,11 @@ use windows_sys::Win32::Storage::FileSystem::{
     CreateFileW, GetCompressedFileSizeW, GetDiskFreeSpaceExW, GetDriveTypeW, GetLogicalDrives,
     GetVolumeInformationW, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT,
     FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
+};
+use windows_sys::Win32::System::Environment::ExpandEnvironmentStringsW;
+use windows_sys::Win32::System::Registry::{
+    RegCloseKey, RegEnumKeyExW, RegOpenKeyExW, RegQueryValueExW, HKEY, HKEY_CURRENT_USER,
+    HKEY_LOCAL_MACHINE, KEY_READ, KEY_WOW64_32KEY, KEY_WOW64_64KEY, REG_EXPAND_SZ, REG_SZ,
 };
 use windows_sys::Win32::System::RestartManager::{
     RmEndSession, RmGetList, RmRegisterResources, RmStartSession, RM_PROCESS_INFO,
@@ -492,36 +498,346 @@ fn read_product_version(install_dir: &Path) -> Option<String> {
     value.get("version")?.as_str().map(|s| s.to_string())
 }
 
+fn has_cursor_exe(dir: &Path) -> bool {
+    dir.join("Cursor.exe").is_file()
+}
+
+fn classify_install_kind(dir: &Path) -> InstallKind {
+    if let Some(local) = env_path("LOCALAPPDATA") {
+        if paths_equal(dir, &local.join("Programs").join("cursor")) {
+            return InstallKind::PerUser;
+        }
+    }
+    if let Some(pf) = env_path("ProgramFiles") {
+        if paths_equal(dir, &pf.join("Cursor")) {
+            return InstallKind::Machine;
+        }
+    }
+    if let Some(pf86) = env_path("ProgramFiles(x86)") {
+        if paths_equal(dir, &pf86.join("Cursor")) {
+            return InstallKind::Machine;
+        }
+    }
+    InstallKind::Portable
+}
+
+fn push_install_dir(candidates: &mut Vec<(InstallKind, PathBuf)>, dir: PathBuf) {
+    if dir.as_os_str().is_empty() {
+        return;
+    }
+    if candidates.iter().any(|(_, p)| paths_equal(p, &dir)) {
+        return;
+    }
+    let kind = classify_install_kind(&dir);
+    candidates.push((kind, dir));
+}
+
+fn expand_env(value: &str) -> String {
+    if !value.contains('%') {
+        return value.to_string();
+    }
+    let wide = to_wide(OsStr::new(value));
+    let needed = unsafe { ExpandEnvironmentStringsW(wide.as_ptr(), ptr::null_mut(), 0) };
+    if needed == 0 {
+        return value.to_string();
+    }
+    let mut buf = vec![0u16; needed as usize];
+    let written = unsafe { ExpandEnvironmentStringsW(wide.as_ptr(), buf.as_mut_ptr(), needed) };
+    if written == 0 {
+        return value.to_string();
+    }
+    wide_to_string(&buf)
+}
+
+fn strip_icon_index(raw: &str) -> &str {
+    if let Some((left, right)) = raw.rsplit_once(',') {
+        if !right.is_empty() && right.chars().all(|c| c == '-' || c.is_ascii_digit()) {
+            return left;
+        }
+    }
+    raw
+}
+
+fn quoted_or_first_token(raw: &str) -> &str {
+    let trimmed = raw.trim();
+    if let Some(rest) = trimmed.strip_prefix('"') {
+        return rest.split('"').next().unwrap_or(rest);
+    }
+    trimmed.split_whitespace().next().unwrap_or(trimmed)
+}
+
+/// True for Anysphere's editor, never this tool or unrelated "Cursor*" software.
+fn is_cursor_product(display_name: &str, publisher: &str) -> bool {
+    let name = display_name.trim().to_ascii_lowercase();
+    let publisher = publisher.trim().to_ascii_lowercase();
+    if name.contains("space-manager")
+        || name.contains("space manager")
+        || name.contains("cursorspacemanager")
+    {
+        return false;
+    }
+    if publisher.contains("anysphere") {
+        return true;
+    }
+    name == "cursor" || name.starts_with("cursor ")
+}
+
+fn dir_if_cursor_exe(path: &Path) -> Option<PathBuf> {
+    if path
+        .file_name()
+        .is_some_and(|n| n.eq_ignore_ascii_case("Cursor.exe"))
+    {
+        return path.parent().map(Path::to_path_buf);
+    }
+    None
+}
+
+fn dir_from_display_icon(raw: &str) -> Option<PathBuf> {
+    let path = PathBuf::from(expand_env(
+        strip_icon_index(quoted_or_first_token(raw)).trim(),
+    ));
+    dir_if_cursor_exe(&path)
+}
+
+fn dir_from_command_line(raw: &str) -> Option<PathBuf> {
+    let path = PathBuf::from(expand_env(quoted_or_first_token(raw)));
+    dir_if_cursor_exe(&path)
+}
+
+fn dir_from_uninstall_string(raw: &str) -> Option<PathBuf> {
+    let path = PathBuf::from(expand_env(quoted_or_first_token(raw)));
+    let name = path.file_name()?.to_string_lossy();
+    if name.eq_ignore_ascii_case("msiexec.exe") {
+        return None;
+    }
+    if let Some(dir) = dir_if_cursor_exe(&path) {
+        return Some(dir);
+    }
+    // NSIS: D:\tools\cursor\unins000.exe next to Cursor.exe
+    path.parent().map(Path::to_path_buf)
+}
+
+fn query_reg_sz(key: HKEY, name: &str) -> Option<String> {
+    let wide_name = if name.is_empty() {
+        None
+    } else {
+        Some(to_wide(OsStr::new(name)))
+    };
+    let name_ptr = wide_name
+        .as_ref()
+        .map(|w| w.as_ptr())
+        .unwrap_or(ptr::null());
+    let mut ty = 0u32;
+    let mut size = 0u32;
+    let status = unsafe {
+        RegQueryValueExW(
+            key,
+            name_ptr,
+            ptr::null_mut(),
+            &mut ty,
+            ptr::null_mut(),
+            &mut size,
+        )
+    };
+    if status != 0 || size == 0 || (ty != REG_SZ && ty != REG_EXPAND_SZ) {
+        return None;
+    }
+    let mut bytes = vec![0u8; size as usize];
+    let status = unsafe {
+        RegQueryValueExW(
+            key,
+            name_ptr,
+            ptr::null_mut(),
+            &mut ty,
+            bytes.as_mut_ptr(),
+            &mut size,
+        )
+    };
+    if status != 0 {
+        return None;
+    }
+    let u16_len = (size as usize) / 2;
+    let wide: Vec<u16> = bytes
+        .chunks_exact(2)
+        .take(u16_len)
+        .map(|c| u16::from_le_bytes([c[0], c[1]]))
+        .collect();
+    let text = wide_to_string(&wide);
+    if text.is_empty() {
+        None
+    } else {
+        Some(expand_env(&text))
+    }
+}
+
+fn open_reg_key(root: HKEY, subkey: &str, sam: u32) -> Option<HKEY> {
+    let wide = to_wide(OsStr::new(subkey));
+    let mut handle = ptr::null_mut();
+    let status = unsafe { RegOpenKeyExW(root, wide.as_ptr(), 0, sam, &mut handle) };
+    if status == 0 && !handle.is_null() {
+        Some(handle)
+    } else {
+        None
+    }
+}
+
+fn collect_uninstall_cursor_dirs(root: HKEY, sam: u32, out: &mut Vec<PathBuf>) {
+    const UNINSTALL: &str = r"Software\Microsoft\Windows\CurrentVersion\Uninstall";
+    let Some(parent) = open_reg_key(root, UNINSTALL, sam) else {
+        return;
+    };
+    let mut index = 0u32;
+    loop {
+        let mut name_len = 256u32;
+        let mut name = vec![0u16; name_len as usize];
+        let status = unsafe {
+            RegEnumKeyExW(
+                parent,
+                index,
+                name.as_mut_ptr(),
+                &mut name_len,
+                ptr::null_mut(),
+                ptr::null_mut(),
+                ptr::null_mut(),
+                ptr::null_mut(),
+            )
+        };
+        if status != 0 {
+            break;
+        }
+        index += 1;
+        let sub_name = wide_to_string(&name);
+        if sub_name.is_empty() {
+            continue;
+        }
+        let sub_path = format!("{UNINSTALL}\\{sub_name}");
+        let Some(child) = open_reg_key(root, &sub_path, sam) else {
+            continue;
+        };
+        let display = query_reg_sz(child, "DisplayName").unwrap_or_default();
+        let publisher = query_reg_sz(child, "Publisher").unwrap_or_default();
+        let install_location = query_reg_sz(child, "InstallLocation").unwrap_or_default();
+        let display_icon = query_reg_sz(child, "DisplayIcon").unwrap_or_default();
+        let uninstall = query_reg_sz(child, "UninstallString").unwrap_or_default();
+        unsafe { RegCloseKey(child) };
+
+        if !is_cursor_product(&display, &publisher) {
+            continue;
+        }
+        if !install_location.trim().is_empty() {
+            out.push(PathBuf::from(
+                install_location.trim().trim_matches('"').trim(),
+            ));
+        }
+        if let Some(dir) = dir_from_display_icon(&display_icon) {
+            out.push(dir);
+        }
+        if let Some(dir) = dir_from_uninstall_string(&uninstall) {
+            out.push(dir);
+        }
+    }
+    unsafe { RegCloseKey(parent) };
+}
+
+fn collect_app_paths_cursor_dir(root: HKEY, sam: u32, out: &mut Vec<PathBuf>) {
+    const APP_PATHS: &str = r"Software\Microsoft\Windows\CurrentVersion\App Paths\Cursor.exe";
+    let Some(key) = open_reg_key(root, APP_PATHS, sam) else {
+        return;
+    };
+    if let Some(exe) = query_reg_sz(key, "") {
+        if let Some(dir) = dir_if_cursor_exe(&PathBuf::from(quoted_or_first_token(&exe))) {
+            out.push(dir);
+        }
+    }
+    if let Some(dir) = query_reg_sz(key, "Path") {
+        let trimmed = dir.trim().trim_matches('"').trim();
+        if !trimmed.is_empty() {
+            out.push(PathBuf::from(trimmed));
+        }
+    }
+    unsafe { RegCloseKey(key) };
+}
+
+fn collect_protocol_cursor_dir(root: HKEY, sam: u32, out: &mut Vec<PathBuf>) {
+    for subkey in [
+        r"Software\Classes\cursor\shell\open\command",
+        r"Software\Classes\Applications\Cursor.exe\shell\open\command",
+    ] {
+        let Some(key) = open_reg_key(root, subkey, sam) else {
+            continue;
+        };
+        if let Some(command) = query_reg_sz(key, "") {
+            if let Some(dir) = dir_from_command_line(&command) {
+                out.push(dir);
+            }
+        }
+        unsafe { RegCloseKey(key) };
+    }
+}
+
+fn path_env_cursor_dirs() -> Vec<PathBuf> {
+    let Some(path) = std::env::var_os("PATH") else {
+        return Vec::new();
+    };
+    std::env::split_paths(&path)
+        .filter(|dir| has_cursor_exe(dir))
+        .collect()
+}
+
+/// Custom installs (e.g. `D:\tools\cursor`) never live in Program Files.
+/// The official installer still writes Uninstall / App Paths / protocol keys.
+fn registered_cursor_dirs() -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    const SAMS: [u32; 3] = [
+        KEY_READ,
+        KEY_READ | KEY_WOW64_64KEY,
+        KEY_READ | KEY_WOW64_32KEY,
+    ];
+    for root in [HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE] {
+        for sam in SAMS {
+            collect_uninstall_cursor_dirs(root, sam, &mut out);
+            collect_app_paths_cursor_dir(root, sam, &mut out);
+            collect_protocol_cursor_dir(root, sam, &mut out);
+        }
+    }
+    out.extend(path_env_cursor_dirs());
+    out
+}
+
 pub fn discover_installation() -> AppInstallation {
     let mut installation = AppInstallation::default();
     let mut candidates: Vec<(InstallKind, PathBuf)> = Vec::new();
 
     if let Some(local) = env_path("LOCALAPPDATA") {
-        candidates.push((InstallKind::PerUser, local.join("Programs").join("cursor")));
+        push_install_dir(&mut candidates, local.join("Programs").join("cursor"));
+        // Older Squirrel layout: %LOCALAPPDATA%\cursor\Cursor.exe
+        push_install_dir(&mut candidates, local.join("cursor"));
     }
     if let Some(pf) = env_path("ProgramFiles") {
-        candidates.push((InstallKind::Machine, pf.join("Cursor")));
+        push_install_dir(&mut candidates, pf.join("Cursor"));
     }
     if let Some(pf86) = env_path("ProgramFiles(x86)") {
-        candidates.push((InstallKind::Machine, pf86.join("Cursor")));
+        push_install_dir(&mut candidates, pf86.join("Cursor"));
+    }
+
+    for dir in registered_cursor_dirs() {
+        push_install_dir(&mut candidates, dir);
     }
 
     let processes = running_processes();
     // A running process is the most reliable evidence, including for portable
-    // installs that live in an arbitrary folder.
+    // installs that live in an arbitrary folder and never wrote uninstall keys.
     for process in &processes {
         if let Some(exe) = &process.exe_path {
             if let Some(dir) = exe.parent() {
-                if !candidates.iter().any(|(_, p)| paths_equal(p, dir)) {
-                    candidates.push((InstallKind::Portable, dir.to_path_buf()));
-                }
+                push_install_dir(&mut candidates, dir.to_path_buf());
             }
         }
     }
 
     let mut found: Vec<(InstallKind, PathBuf)> = Vec::new();
     for (kind, dir) in candidates {
-        if dir.join("Cursor.exe").is_file() {
+        if has_cursor_exe(&dir) {
             found.push((kind, dir));
         }
     }
@@ -1079,5 +1395,46 @@ pub fn copy_tree(
                 progress(stats.logical_bytes, stats.file_count);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod install_discovery_tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn cursor_product_matches_editor_not_this_tool() {
+        assert!(is_cursor_product("Cursor", "Anysphere"));
+        assert!(is_cursor_product("Cursor", ""));
+        assert!(is_cursor_product("Cursor Nightly", "Anysphere"));
+        assert!(!is_cursor_product("Cursor Space Manager", ""));
+        assert!(!is_cursor_product("VS Code", "Microsoft"));
+        assert!(!is_cursor_product("Notepad", ""));
+    }
+
+    #[test]
+    fn display_icon_yields_install_dir() {
+        assert_eq!(
+            dir_from_display_icon(r#""D:\tools\cursor\Cursor.exe",0"#).unwrap(),
+            PathBuf::from(r"D:\tools\cursor")
+        );
+        assert_eq!(
+            dir_from_display_icon(r"D:\tools\cursor\Cursor.exe").unwrap(),
+            PathBuf::from(r"D:\tools\cursor")
+        );
+    }
+
+    #[test]
+    fn command_and_uninstall_strings_yield_install_dir() {
+        assert_eq!(
+            dir_from_command_line(r#""D:\tools\cursor\Cursor.exe" "%1""#).unwrap(),
+            PathBuf::from(r"D:\tools\cursor")
+        );
+        assert_eq!(
+            dir_from_uninstall_string(r#""D:\tools\cursor\unins000.exe""#).unwrap(),
+            PathBuf::from(r"D:\tools\cursor")
+        );
+        assert!(dir_from_uninstall_string(r"MsiExec.exe /X{GUID}").is_none());
     }
 }

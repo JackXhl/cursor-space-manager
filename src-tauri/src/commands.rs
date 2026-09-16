@@ -359,9 +359,7 @@ pub fn start_migration(
     let probe = planner::probe_target(&plan.target_root);
     if !probe.writable {
         return Err(AppErrorWire(AppError::unsafe_op(
-            probe
-                .message
-                .unwrap_or_else(|| "目标目录不可写".into()),
+            probe.message.unwrap_or_else(|| "目标目录不可写".into()),
         )));
     }
 
